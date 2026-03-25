@@ -60,29 +60,36 @@ const httpServer = http.createServer(async (req, res) => {
   let transport: StreamableHTTPServerTransport;
 
   if (sessionId && sessions.has(sessionId)) {
+    // Existing session — route to the already-initialized transport.
     transport = sessions.get(sessionId)!;
-  } else if (!sessionId) {
-    transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => randomUUID(),
-    });
-
-    transport.onclose = () => {
-      if (transport.sessionId) {
-        sessions.delete(transport.sessionId);
+    try {
+      await transport.handleRequest(req, res);
+    } catch (err) {
+      if (!res.headersSent) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Internal server error" }));
       }
-    };
-
-    const server = createServer();
-    await server.connect(transport);
-
-    if (transport.sessionId) {
-      sessions.set(transport.sessionId, transport);
+      console.error("Request handling error:", err);
     }
-  } else {
+    return;
+  }
+
+  if (sessionId) {
+    // Client sent a session ID we don't recognise (e.g. server restarted).
     res.writeHead(404, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Session not found" }));
     return;
   }
+
+  // No session ID — this is the first request (initialize).
+  // The session ID is generated INSIDE handleRequest, so we must call it
+  // first and only then store the transport in the sessions map.
+  transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: () => randomUUID(),
+  });
+
+  const server = createServer();
+  await server.connect(transport);
 
   try {
     await transport.handleRequest(req, res);
@@ -92,6 +99,15 @@ const httpServer = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ error: "Internal server error" }));
     }
     console.error("Request handling error:", err);
+    return;
+  }
+
+  // Session ID is now set after handleRequest processed the initialize message.
+  if (transport.sessionId) {
+    sessions.set(transport.sessionId, transport);
+    transport.onclose = () => {
+      if (transport.sessionId) sessions.delete(transport.sessionId);
+    };
   }
 });
 
