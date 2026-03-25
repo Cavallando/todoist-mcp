@@ -14,7 +14,6 @@ arch:
 startup: application
 boot: auto
 init: false
-host_network: true
 ports:
   3000/tcp: 3000
 ports_description:
