@@ -1,5 +1,5 @@
 name: Todoist MCP Server
-version: "1.0.0"
+version: "1.1.0"
 slug: todoist_mcp
 description: >
   MCP (Model Context Protocol) server for Todoist. Lets AI assistants like
