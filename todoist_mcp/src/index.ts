@@ -4,6 +4,19 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { randomUUID } from "node:crypto";
 
+function readBody(req: http.IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk: string) => { raw += chunk; });
+    req.on("end", () => {
+      if (!raw) { resolve(undefined); return; }
+      try { resolve(JSON.parse(raw)); } catch { resolve(undefined); }
+    });
+    req.on("error", reject);
+  });
+}
+
 import { registerTaskTools } from "./tools/tasks.js";
 import { registerProjectTools } from "./tools/projects.js";
 import { registerLabelTools } from "./tools/labels.js";
@@ -55,6 +68,11 @@ const httpServer = http.createServer(async (req, res) => {
     return;
   }
 
+  // Parse the body once up front so it can be passed to handleRequest.
+  // The Streamable HTTP transport uses the parsedBody argument when present;
+  // without it, body parsing can fail on some runtimes/proxies.
+  const body = req.method === "POST" ? await readBody(req) : undefined;
+
   const sessionId = req.headers["mcp-session-id"] as string | undefined;
 
   let transport: StreamableHTTPServerTransport;
@@ -63,7 +81,7 @@ const httpServer = http.createServer(async (req, res) => {
     // Existing session — route to the already-initialized transport.
     transport = sessions.get(sessionId)!;
     try {
-      await transport.handleRequest(req, res);
+      await transport.handleRequest(req, res, body);
     } catch (err) {
       if (!res.headersSent) {
         res.writeHead(500, { "Content-Type": "application/json" });
@@ -101,7 +119,7 @@ const httpServer = http.createServer(async (req, res) => {
   await server.connect(transport);
 
   try {
-    await transport.handleRequest(req, res);
+    await transport.handleRequest(req, res, body);
   } catch (err) {
     if (!res.headersSent) {
       res.writeHead(500, { "Content-Type": "application/json" });
