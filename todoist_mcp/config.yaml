@@ -1,0 +1,26 @@
+name: Todoist MCP Server
+version: "1.0.0"
+slug: todoist_mcp
+description: >
+  MCP (Model Context Protocol) server for Todoist. Lets AI assistants like
+  Cursor and Claude manage your tasks, projects, sections, labels, and comments
+  via a local HTTP endpoint on your network.
+url: https://github.com/michaelcavallaro/todoist-mcp
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+startup: application
+boot: auto
+init: false
+ports:
+  3000/tcp: 3000
+ports_description:
+  3000/tcp: MCP Server — Streamable HTTP endpoint (POST /mcp)
+options:
+  todoist_api_token: ""
+  port: 3000
+schema:
+  todoist_api_token: str
+  port: int

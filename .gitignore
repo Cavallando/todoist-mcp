@@ -1,0 +1,14 @@
+# Add-on build artefacts
+todoist_mcp/node_modules/
+todoist_mcp/dist/
+todoist_mcp/.env
+
+# Yarn
+todoist_mcp/.yarn/cache
+todoist_mcp/.yarn/unplugged
+todoist_mcp/.yarn/build-state.yml
+todoist_mcp/.yarn/install-state.gz
+todoist_mcp/.pnp.*
+
+# macOS
+.DS_Store
