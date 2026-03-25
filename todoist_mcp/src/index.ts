@@ -132,6 +132,7 @@ const httpServer = http.createServer(async (req, res) => {
 httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`Todoist MCP server listening on http://0.0.0.0:${PORT}/mcp`);
   console.log(`Add to Cursor/Claude: { "url": "http://<your-pi-ip>:${PORT}/mcp" }`);
+  console.log("Server version: 1.1.0");
 });
 
 httpServer.on("error", (err) => {
