@@ -31,6 +31,11 @@ function createServer(): McpServer {
   return server;
 }
 
+// Session map: reuse the same transport across the MCP handshake (initialize →
+// initialized notification → tool calls). A new transport is only created when
+// there is no mcp-session-id header (i.e. the very first request of a session).
+const sessions = new Map<string, StreamableHTTPServerTransport>();
+
 const httpServer = http.createServer(async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
@@ -50,19 +55,36 @@ const httpServer = http.createServer(async (req, res) => {
     return;
   }
 
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: () => randomUUID(),
-  });
+  const sessionId = req.headers["mcp-session-id"] as string | undefined;
 
-  const server = createServer();
+  let transport: StreamableHTTPServerTransport;
 
-  res.on("close", () => {
-    transport.close().catch(() => {});
-    server.close().catch(() => {});
-  });
+  if (sessionId && sessions.has(sessionId)) {
+    transport = sessions.get(sessionId)!;
+  } else if (!sessionId) {
+    transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => randomUUID(),
+    });
+
+    transport.onclose = () => {
+      if (transport.sessionId) {
+        sessions.delete(transport.sessionId);
+      }
+    };
+
+    const server = createServer();
+    await server.connect(transport);
+
+    if (transport.sessionId) {
+      sessions.set(transport.sessionId, transport);
+    }
+  } else {
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Session not found" }));
+    return;
+  }
 
   try {
-    await server.connect(transport);
     await transport.handleRequest(req, res);
   } catch (err) {
     if (!res.headersSent) {
