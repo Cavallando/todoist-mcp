@@ -82,11 +82,20 @@ const httpServer = http.createServer(async (req, res) => {
   }
 
   // No session ID — this is the first request (initialize).
-  // The session ID is generated INSIDE handleRequest, so we must call it
-  // first and only then store the transport in the sessions map.
+  // onsessioninitialized fires synchronously inside handleRequest the instant
+  // the session ID is generated, before the response is sent to the client.
+  // This guarantees the transport is in the map before the client can send
+  // any follow-up request with that session ID.
   transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID(),
+    onsessioninitialized: (sid) => {
+      sessions.set(sid, transport);
+    },
   });
+
+  transport.onclose = () => {
+    if (transport.sessionId) sessions.delete(transport.sessionId);
+  };
 
   const server = createServer();
   await server.connect(transport);
@@ -99,15 +108,6 @@ const httpServer = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ error: "Internal server error" }));
     }
     console.error("Request handling error:", err);
-    return;
-  }
-
-  // Session ID is now set after handleRequest processed the initialize message.
-  if (transport.sessionId) {
-    sessions.set(transport.sessionId, transport);
-    transport.onclose = () => {
-      if (transport.sessionId) sessions.delete(transport.sessionId);
-    };
   }
 });
 
